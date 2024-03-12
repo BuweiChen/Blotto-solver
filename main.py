@@ -1,6 +1,6 @@
-import scipy
-from scipy.optimize import linprog
+from scipy.optimize import *
 from itertools import *
+from numpy import transpose, ndarray
 
 def get_pure_strategies(units, values):
     """ get a list of pure strategies
@@ -66,7 +66,7 @@ def get_expected_value_general_strategies(g_strategy1, g_strategy2, values):
     
     return expected_value
 
-def get_payoff_matrix(units, values):
+def get_payoff_matrix(pure_strategies, values):
     """gets the payoff matrix of the blotto game associated with units and values
 
     Args:
@@ -76,7 +76,6 @@ def get_payoff_matrix(units, values):
     Returns:
         list: the payoff matrix
     """
-    pure_strategies = get_pure_strategies(units, values)
     payoff_matrix = []
     num_pure_strats = len(pure_strategies)
     for i in range(num_pure_strats):
@@ -87,15 +86,30 @@ def get_payoff_matrix(units, values):
     
     return payoff_matrix
 
-def get_equilibrium_general_strategy(units, values):
+def get_normalized_probability(probs):
+    """gets the same list of probabilities but with their sum normalized to 1
+
+    Args:
+        probs (list): list of probabilities
+
+    Returns:
+        list: list of probabilities, normalized
+    """
+    
+    sum_probs = sum(probs)
+    multiply_factor = 1/sum_probs
+    for i in range(len(probs)):
+        probs[i] = probs[i] * multiply_factor
+    
+    return probs
+
+def print_equilibrium_general_strategy(units, values):
     """gets the nash equilibrium general strategy that is optimized for win or score
 
     Args:
         units (int): the number of units to distribute for each player
         values (list): a list of values of each battlefield
 
-    Returns:
-        list: a list where each entry is a pure strategy followed by the probability of playing that strategy
     """
     
     # the nash general strategy must be the best strategy going up against itself
@@ -104,14 +118,16 @@ def get_equilibrium_general_strategy(units, values):
     # we must have expected_value_general_strategies(pstrat, nash_gstrat, values) <= z
     # where pstrat is any pure strategy
     
-    payoff_matrix = get_payoff_matrix(units, values)
+    pure_strategies = get_pure_strategies(units, values)
+    payoff_matrix_transpose = ndarray.tolist(transpose(get_payoff_matrix(pure_strategies, values)))
     
+    # print(payoff_matrix_transpose)
     # flip all the values and move z to lhs so we can use it to feed lhs_ineq
     lhs_eq = [[]]
     rhs_ineq = []
     obj = []
     bnd = []
-    for i in range(len(payoff_matrix)):
+    for i in range(len(payoff_matrix_transpose)):
         # make the rhs_ineq
         rhs_ineq.append(0)
         # make the normalization condition: x1 + x2 + x3 + ... = 1
@@ -120,26 +136,26 @@ def get_equilibrium_general_strategy(units, values):
         obj.append(0)
         # set bounds 0 <= x1, x2, x3, ... <= 1
         bnd.append((0, 1))
-        for j in range(len(payoff_matrix)):
-            payoff_matrix[i][j] = -payoff_matrix[i][j]
-        payoff_matrix[i].append(1)
+        for j in range(len(payoff_matrix_transpose)):
+            payoff_matrix_transpose[i][j] = -payoff_matrix_transpose[i][j]
+        payoff_matrix_transpose[i].append(1)
     
     # add the coefficient for z
     lhs_eq[0].append(0)
     # add the bounds for z
     bnd.append((0, float("inf")))
-    lhs_ineq = payoff_matrix
+    lhs_ineq = payoff_matrix_transpose
     rhs_eq = [1]
     
     # goal is to maximize z, so minimize -z
     obj.append(-1)
     
-    print(obj)
-    print(lhs_ineq)
-    print(rhs_ineq)
-    print(lhs_eq)
-    print(rhs_eq)
-    print(bnd)
+    # print(obj)
+    # print(lhs_ineq)
+    # print(rhs_ineq)
+    # print(lhs_eq)
+    # print(rhs_eq)
+    # print(bnd)
     
     opt = linprog(c=obj, 
                   A_ub=lhs_ineq, 
@@ -147,10 +163,23 @@ def get_equilibrium_general_strategy(units, values):
                   A_eq=lhs_eq, 
                   b_eq=rhs_eq, 
                   bounds=bnd,
-                  method="revised simplex")
+                  method="highs",
+                  options={'primal_feasibility_tolerance': 1e-6})
     
-    print(opt.status)
-    return opt.x
+    # print(opt.status)
     
+    normalized_probs = get_normalized_probability(opt.x[0:len(opt.x) - 1])
     
-print(get_equilibrium_general_strategy(2, [1,2,3]))
+    sum_prob = 0
+    for i in range(len(pure_strategies)):
+        if abs(normalized_probs[i] - 0) <= 1e-12:
+            continue
+        output_row = ""
+        for j in range(len(pure_strategies[i])):
+            output_row += str(pure_strategies[i][j]) + ","
+        output_row += str(normalized_probs[i])
+        sum_prob += normalized_probs[i]
+        print(output_row)
+    print(sum_prob)
+    
+print_equilibrium_general_strategy(5, [2,4,5])
