@@ -1,6 +1,7 @@
 from scipy.optimize import *
 from itertools import *
 from numpy import transpose, ndarray
+import sys
 
 def get_pure_strategies(units, values):
     """ get a list of pure strategies
@@ -131,13 +132,14 @@ def get_normalized_probability(probs):
     
     return probs
 
-def print_equilibrium_general_strategy(units, values):
+def print_equilibrium_general_strategy(units, values, tol, obj):
     """gets the nash equilibrium general strategy that is optimized for win or score
 
     Args:
         units (int): the number of units to distribute for each player
         values (list): a list of values of each battlefield
-
+        tol (float): the tolerance used for calculations
+        obj (string): "win", "score", or "lottery"
     """
     
     # the nash general strategy must be the best strategy going up against itself
@@ -147,7 +149,7 @@ def print_equilibrium_general_strategy(units, values):
     # where pstrat is any pure strategy
     
     pure_strategies = get_pure_strategies(units, values)
-    payoff_matrix_transpose = ndarray.tolist(transpose(get_payoff_matrix(pure_strategies, values, "score")))
+    payoff_matrix_transpose = ndarray.tolist(transpose(get_payoff_matrix(pure_strategies, values, obj)))
     
     # print(payoff_matrix_transpose)
     # flip all the values and move z to lhs so we can use it to feed lhs_ineq
@@ -192,7 +194,7 @@ def print_equilibrium_general_strategy(units, values):
                   b_eq=rhs_eq, 
                   bounds=bnd,
                   method="highs",
-                  options={'primal_feasibility_tolerance': 1e-6})
+                  options={'primal_feasibility_tolerance': tol})
     
     # print(opt.status)
     
@@ -209,46 +211,63 @@ def print_equilibrium_general_strategy(units, values):
         sum_prob += normalized_probs[i]
         print(output_row)
         
-def verify_equilibrium_general_strategy(g_strategy, values, obj, tol=1e-6):
+def verify_equilibrium_general_strategy(g_strategy, values, tol, obj):
     """prints PASSED if g_strategy is an equilibrium strategy for both players, and the violation if not
 
     Args:
         g_strategy (list): a list where each entry is a pure strategy followed by the probability of playing that strategy
         values (list): a list of values of each battlefield
+        tol (float): the tolerance used for calculations
         obj (string): "win", "score", or "lottery"
     """
-    units = sum(g_strategy[0][0:len(g_strategy[0])-1])
+    units = int(sum(g_strategy[0][0:len(g_strategy[0])-1]))
+    # print(units, file=sys.stderr)
     pure_strategies = get_pure_strategies(units, values)
     equilibrium_expected_value = get_expected_value_general_strategies(g_strategy, g_strategy, values, obj)
     for s in pure_strategies:
         s.append(1)
         alt_expected_value = get_expected_value_general_strategies(g_strategy, [s], values, obj)
         if alt_expected_value + tol < equilibrium_expected_value:
-            print("E[X, ({0})] = {1} < {2}".format(str(s)[1:len(str(s))-1], alt_expected_value, equilibrium_expected_value))
+            print("E[X, ({0})] = {1} < {2}".format(str(s)[1:len(str(s))-4], alt_expected_value, equilibrium_expected_value))
             return
     print("PASSED")
-    
-    
-print_equilibrium_general_strategy(5, [2,4,5])
 
-s1 = [[0,0,5,0.1999999999999999],
-      [0,1,4,0.15000000000000044],
-      [0,2,3,0.09999999999999985],
-      [0,3,2,0.05000000000000036],
-      [1,0,4,0.04999999999999977],
-      [1,1,3,0.10000000000000005],
-      [1,2,2,0.1500000000000001],
-      [1,3,1,0.19999999999999962]]
-verify_equilibrium_general_strategy(s1, [2,4,5], "score")
-
-s2 = [[0,0,5,0.14045462101642173],
-[0,1,4,0.15496211495866577],
-[0,2,3,0.04541673569373383],
-[0,3,2,0.05992422986845587],
-[1,0,4,0.08473480443797905],
-[1,1,3,0.09503788495378677],
-[1,2,2,0.17977268944230548],
-[1,3,1,0.1404546206153363],
-[1,4,0,0.04962114905424416],
-[2,3,0,0.04962114943279007]]
-verify_equilibrium_general_strategy(s2, [2,4,5], "score")
+if __name__ == "__main__":
+    # Command line arguments
+    find_or_verify = sys.argv[1]
+    # print(find_or_verify,file=sys.stderr)
+    if sys.argv[2] == "--tolerance":
+        tol = float(sys.argv[3])
+        # arg_index is the next argument to read
+        arg_index = 4
+    else:
+        tol = 1e-6
+        arg_index = 2
+    obj = sys.argv[arg_index][2:]
+    # print(obj,file=sys.stderr)
+    arg_index += 1
+    
+    if find_or_verify == "--find":
+        arg_index += 1
+        units = int(sys.argv[arg_index])
+        arg_index += 1
+    else:
+        units = None
+    # print(units,file=sys.stderr)
+    
+    values = list(map(int, sys.argv[arg_index:]))
+    # print(values,file=sys. stderr)
+    
+    if find_or_verify == "--verify":
+        raw_input = sys.stdin.readlines()
+        g_strategy = [[float(value) for value in line.strip().split(',')] for line in raw_input]
+    else:
+        g_strategy = None
+    # print(g_strategy,file=sys.stderr)
+    
+    if find_or_verify == "--find":
+        print_equilibrium_general_strategy(units, values, tol, obj)
+    elif find_or_verify == "--verify":
+        verify_equilibrium_general_strategy(g_strategy, values, tol, obj)
+    else:
+        print("invalid syntax")
