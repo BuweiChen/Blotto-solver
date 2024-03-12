@@ -97,7 +97,6 @@ def get_equilibrium_general_strategy(units, values):
     Returns:
         list: a list where each entry is a pure strategy followed by the probability of playing that strategy
     """
-    pure_strategies = get_pure_strategies(units, values)
     
     # the nash general strategy must be the best strategy going up against itself
     # it must be at least as good as any pure strategy going up against the nash general strategy
@@ -105,11 +104,53 @@ def get_equilibrium_general_strategy(units, values):
     # we must have expected_value_general_strategies(pstrat, nash_gstrat, values) <= z
     # where pstrat is any pure strategy
     
-print(get_payoff_matrix(2, [1,2,3]))
-
-[[3.0, 3.5, 3.5, 4.0, 3, 4.0], 
- [2.5, 3.0, 3.5, 3.5, 4.0, 5], 
- [2.5, 2.5, 3.0, 2, 3.5, 3.5], 
- [2.0, 2.5, 4, 3.0, 3.5, 4.0], 
- [3, 2.0, 2.5, 2.5, 3.0, 3.5], 
- [2.0, 1, 2.5, 2.0, 2.5, 3.0]]
+    payoff_matrix = get_payoff_matrix(units, values)
+    
+    # flip all the values and move z to lhs so we can use it to feed lhs_ineq
+    lhs_eq = [[]]
+    rhs_ineq = []
+    obj = []
+    bnd = []
+    for i in range(len(payoff_matrix)):
+        # make the rhs_ineq
+        rhs_ineq.append(0)
+        # make the normalization condition: x1 + x2 + x3 + ... = 1
+        lhs_eq[0].append(1)
+        # set up for minimizing -z
+        obj.append(0)
+        # set bounds 0 <= x1, x2, x3, ... <= 1
+        bnd.append((0, 1))
+        for j in range(len(payoff_matrix)):
+            payoff_matrix[i][j] = -payoff_matrix[i][j]
+        payoff_matrix[i].append(1)
+    
+    # add the coefficient for z
+    lhs_eq[0].append(0)
+    # add the bounds for z
+    bnd.append((0, float("inf")))
+    lhs_ineq = payoff_matrix
+    rhs_eq = [1]
+    
+    # goal is to maximize z, so minimize -z
+    obj.append(-1)
+    
+    print(obj)
+    print(lhs_ineq)
+    print(rhs_ineq)
+    print(lhs_eq)
+    print(rhs_eq)
+    print(bnd)
+    
+    opt = linprog(c=obj, 
+                  A_ub=lhs_ineq, 
+                  b_ub=rhs_ineq,
+                  A_eq=lhs_eq, 
+                  b_eq=rhs_eq, 
+                  bounds=bnd,
+                  method="revised simplex")
+    
+    print(opt.status)
+    return opt.x
+    
+    
+print(get_equilibrium_general_strategy(2, [1,2,3]))
